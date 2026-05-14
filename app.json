@@ -1,0 +1,24 @@
+{
+  "expo": {
+    "name": "Mini Activités",
+    "slug": "mini-activites",
+    "scheme": "mini-activites",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.local.miniactivites"
+    },
+    "android": {
+      "package": "com.local.miniactivites",
+      "adaptiveIcon": {
+        "backgroundColor": "#F7EFE5"
+      }
+    },
+    "plugins": [
+      "expo-router"
+    ]
+  }
+}
