@@ -46,7 +46,6 @@ export function ActivityCard({
     <CompactActivityContent
       activity={activity}
       favorite={favorite}
-      onOpen={onPress}
       onToggleFavorite={onToggleFavorite}
       rightAction={rightAction}
     />
@@ -54,7 +53,6 @@ export function ActivityCard({
     <DetailedActivityContent
       activity={activity}
       favorite={favorite}
-      onOpen={onPress}
       onToggleFavorite={onToggleFavorite}
       rightAction={rightAction}
     />
@@ -63,6 +61,7 @@ export function ActivityCard({
   const cardStyle = compact
     ? {
         minHeight: 286,
+        position: "relative" as const,
         borderRadius: 18,
         borderCurve: "continuous" as const,
         backgroundColor: colors.surface,
@@ -71,6 +70,7 @@ export function ActivityCard({
       }
     : {
         padding: 18,
+        position: "relative" as const,
         borderRadius: radius.md,
         borderCurve: "continuous" as const,
         backgroundColor: colors.surface,
@@ -79,7 +79,65 @@ export function ActivityCard({
         boxShadow: "0 10px 24px rgba(15, 23, 42, 0.09)"
       };
 
-  return <View style={cardStyle}>{content}</View>;
+  return (
+    <View style={cardStyle}>
+      {content}
+      {onPress ? (
+        <CardPressLayer
+          label={`Ouvrir ${activity.title}`}
+          reserveTopRight={Boolean(onToggleFavorite || rightAction)}
+          onPress={onPress}
+        />
+      ) : null}
+    </View>
+  );
+}
+
+function CardPressLayer({
+  label,
+  reserveTopRight,
+  onPress
+}: {
+  label: string;
+  reserveTopRight: boolean;
+  onPress: () => void;
+}) {
+  if (!reserveTopRight) {
+    return <CardPressZone label={label} onPress={onPress} style={{ top: 0, right: 0, bottom: 0, left: 0 }} />;
+  }
+
+  return (
+    <>
+      <CardPressZone label={label} onPress={onPress} style={{ top: 0, left: 0, right: 118, height: 76 }} />
+      <CardPressZone label={label} onPress={onPress} style={{ top: 76, right: 0, bottom: 0, left: 0 }} />
+    </>
+  );
+}
+
+function CardPressZone({
+  label,
+  onPress,
+  style
+}: {
+  label: string;
+  onPress: () => void;
+  style: ViewStyle;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      style={({ pressed }) => [
+        {
+          position: "absolute",
+          zIndex: 1,
+          backgroundColor: pressed ? "rgba(15, 23, 42, 0.04)" : "rgba(255, 255, 255, 0)"
+        },
+        style
+      ]}
+    />
+  );
 }
 
 function CompactActivityContent({
@@ -437,6 +495,8 @@ function FavoriteButton({
       }}
       style={({ pressed }) => ({
         minHeight: compact ? 38 : 40,
+        position: "relative",
+        zIndex: 2,
         borderRadius: compact ? 999 : 10,
         borderCurve: "continuous",
         paddingHorizontal: compact ? 14 : 18,

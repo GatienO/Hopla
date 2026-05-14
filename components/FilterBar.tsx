@@ -1,10 +1,34 @@
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { Modal, Pressable, ScrollView, Text, View } from "react-native";
-import { AdvancedFilters } from "@/components/AdvancedFilters";
-import { ActivityFilters } from "@/types/activity";
-import { SMART_FILTER_OPTIONS } from "@/types/options";
+import { Modal, Pressable, ScrollView, Text, useWindowDimensions, View } from "react-native";
+import type { ViewStyle } from "react-native";
+import type {
+  ActivityFilters,
+  DevelopmentGoalGroup,
+  MaterialGroup,
+  ParentMood
+} from "@/types/activity";
+import {
+  AGE_RANGES,
+  CLEANUP_TIME_OPTIONS,
+  DEVELOPMENT_GOAL_GROUP_OPTIONS,
+  DURATION_OPTIONS,
+  ENERGY_OPTIONS,
+  MATERIAL_GROUP_OPTIONS,
+  MESS_OPTIONS,
+  NOISE_OPTIONS,
+  PARENT_MOOD_OPTIONS,
+  SEASON_OPTIONS,
+  SETUP_TIME_OPTIONS,
+  SKILL_OPTIONS,
+  SMART_FILTER_OPTIONS,
+  WEATHER_OPTIONS
+} from "@/types/options";
 import { colors, radius } from "@/utils/theme";
+
+const headerGradientStyle = {
+  backgroundImage: `linear-gradient(110deg, ${colors.headerStart} 0%, ${colors.headerMiddle} 52%, ${colors.headerEnd} 100%)`
+} as unknown as ViewStyle;
 
 type FilterBarProps = {
   filters: ActivityFilters;
@@ -13,44 +37,33 @@ type FilterBarProps = {
   onReset: () => void;
 };
 
-type QuickFilter = {
-  key: string;
-  label: string;
-  selected: boolean;
-  onPress: () => void;
-};
+type CategoryId =
+  | "suggested"
+  | "moment"
+  | "age"
+  | "time"
+  | "materials"
+  | "parent"
+  | "weather"
+  | "mess"
+  | "autonomy"
+  | "development";
 
-type QuickFilterGroup = {
-  key: string;
-  title: string;
-  helper: string;
-  filters: QuickFilter[];
+type FilterCategory = {
+  id: CategoryId;
+  label: string;
+  count: number;
 };
 
 export function FilterBar({ filters, resultCount, onChange, onReset }: FilterBarProps) {
   const [expanded, setExpanded] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<CategoryId>("suggested");
+  const { width, height } = useWindowDimensions();
 
   const activeFilterCount = getActiveFilterCount(filters);
-  const activeFilterLabel =
-    activeFilterCount > 0
-      ? `${activeFilterCount} filtre${activeFilterCount > 1 ? "s" : ""} actif${activeFilterCount > 1 ? "s" : ""}`
-      : "Aucun filtre actif";
-
-  const quickFilterGroups = useMemo<QuickFilterGroup[]>(() => {
-    return [
-      {
-        key: "need",
-        title: "De quoi tu as besoin ?",
-        helper: "Choisis d'abord le moment",
-        filters: SMART_FILTER_OPTIONS.map((option) => ({
-          key: `need-${option.id}`,
-          label: option.label,
-          selected: filters.need === option.id,
-          onPress: () => onChange(getNeedChange(filters, option.id))
-        }))
-      }
-    ];
-  }, [filters, onChange]);
+  const categories = useMemo(() => getFilterCategories(filters), [filters]);
+  const currentCategory = categories.find((category) => category.id === selectedCategory) ?? categories[0];
+  const isWide = width >= 760;
 
   return (
     <View
@@ -96,7 +109,7 @@ export function FilterBar({ filters, resultCount, onChange, onReset }: FilterBar
               }}
             >
               <Text selectable={false} style={{ color: colors.surface, fontSize: 13, lineHeight: 16, fontWeight: "900" }}>
-                ★
+                ✓
               </Text>
               <Text selectable style={{ color: colors.surface, fontSize: 13, fontWeight: "900" }}>
                 {activeFilterCount} filtre{activeFilterCount > 1 ? "s" : ""}
@@ -111,7 +124,7 @@ export function FilterBar({ filters, resultCount, onChange, onReset }: FilterBar
             label="Filtrer"
             selected={expanded}
             icon={<FilterIcon />}
-            onPress={() => setExpanded((current) => !current)}
+            onPress={() => setExpanded(true)}
           />
         </View>
       </View>
@@ -119,109 +132,524 @@ export function FilterBar({ filters, resultCount, onChange, onReset }: FilterBar
       <Modal
         visible={expanded}
         transparent
-        animationType="fade"
+        animationType="slide"
         onRequestClose={() => setExpanded(false)}
+        statusBarTranslucent
       >
         <View
           style={{
             flex: 1,
-            justifyContent: "center",
-            padding: 16,
-            backgroundColor: "rgba(15, 23, 42, 0.44)"
+            justifyContent: isWide ? "center" : "flex-end",
+            backgroundColor: isWide ? "rgba(15, 23, 42, 0.48)" : colors.background
           }}
         >
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Masquer les options"
-            onPress={() => setExpanded(false)}
-            style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0 }}
-          />
+          {isWide ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Fermer les filtres"
+              onPress={() => setExpanded(false)}
+              style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0 }}
+            />
+          ) : null}
 
           <View
             style={{
-              width: "100%",
-              maxWidth: 640,
-              maxHeight: "86%",
               alignSelf: "center",
-              borderRadius: radius.md,
+              width: "100%",
+              maxWidth: isWide ? 940 : undefined,
+              height: isWide ? Math.min(height - 72, 780) : "100%",
+              borderRadius: isWide ? 24 : 0,
               borderCurve: "continuous",
-              backgroundColor: colors.surface,
-              borderWidth: 1,
-              borderColor: colors.border,
               overflow: "hidden",
-              boxShadow: "0 24px 56px rgba(15, 23, 42, 0.24)"
+              backgroundColor: colors.background,
+              boxShadow: isWide ? "0 24px 64px rgba(15, 23, 42, 0.28)" : undefined
             }}
           >
             <View
-              style={{
-                padding: 18,
-                borderBottomWidth: 1,
-                borderBottomColor: colors.border,
-                gap: 10
-              }}
-            >
-              <View
-                style={{
+              style={[
+                {
+                  minHeight: 82,
+                  paddingHorizontal: isWide ? 28 : 20,
                   flexDirection: "row",
-                  flexWrap: "wrap",
                   alignItems: "center",
                   justifyContent: "space-between",
-                  gap: 10
-                }}
+                  borderBottomWidth: 1,
+                  borderBottomColor: "rgba(255, 255, 255, 0.2)",
+                  backgroundColor: colors.primaryDark
+                },
+                headerGradientStyle
+              ]}
+            >
+              <Text selectable style={{ color: colors.surface, fontSize: 26, lineHeight: 32, fontWeight: "900" }}>
+                Filtres
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Fermer les filtres"
+                onPress={() => setExpanded(false)}
+                style={({ pressed }) => ({
+                  width: 48,
+                  height: 48,
+                  borderRadius: 999,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: "rgba(255, 255, 255, 0.16)",
+                  borderWidth: 1,
+                  borderColor: "rgba(255, 255, 255, 0.24)",
+                  opacity: pressed ? 0.6 : 1
+                })}
               >
-                <View style={{ gap: 3, minWidth: 0, flex: 1 }}>
-                  <Text selectable style={{ color: colors.text, fontSize: 20, fontWeight: "900" }}>
-                    Options de filtre
-                  </Text>
-                  <Text selectable style={{ color: colors.muted, fontSize: 13, fontWeight: "800" }}>
-                    {activeFilterLabel}
-                  </Text>
-                </View>
-
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  <ToolbarButton label="Effacer" onPress={onReset} tone="light" />
-                  <CloseButton onPress={() => setExpanded(false)} />
-                </View>
-              </View>
+                <Text selectable={false} style={{ color: colors.surface, fontSize: 34, lineHeight: 38, fontWeight: "700" }}>
+                  ×
+                </Text>
+              </Pressable>
             </View>
 
-            <ScrollView
-              contentInsetAdjustmentBehavior="automatic"
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ padding: 18, gap: 16 }}
-            >
-              <View style={{ gap: 12 }}>
-                {quickFilterGroups.map((group, index) => (
-                  <QuickFilterSection key={group.key} title={group.title} helper={group.helper} divided={index > 0}>
-                    {group.filters.map((filter) => (
-                      <CompactChip
-                        key={filter.key}
-                        label={filter.label}
-                        selected={filter.selected}
-                        onPress={filter.onPress}
-                      />
-                    ))}
-                  </QuickFilterSection>
+            <View style={{ flex: 1, flexDirection: "row", minHeight: 0 }}>
+              <View
+                style={{
+                  width: isWide ? 278 : 132,
+                  flexGrow: 0,
+                  flexShrink: 0,
+                  backgroundColor: colors.primarySoft,
+                  borderRightWidth: 1,
+                  borderRightColor: colors.border
+                }}
+              >
+                {categories.map((category) => (
+                  <CategoryTab
+                    key={category.id}
+                    category={category}
+                    selected={category.id === currentCategory.id}
+                    onPress={() => setSelectedCategory(category.id)}
+                  />
                 ))}
               </View>
 
-              <AdvancedFilters filters={filters} onChange={onChange} />
-            </ScrollView>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <ScrollView
+                  contentInsetAdjustmentBehavior="automatic"
+                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={{
+                    paddingHorizontal: isWide ? 30 : 20,
+                    paddingTop: isWide ? 34 : 28,
+                    paddingBottom: 108,
+                    gap: 18
+                  }}
+                >
+                  <Text selectable style={{ color: colors.text, fontSize: isWide ? 27 : 23, lineHeight: isWide ? 34 : 29, fontWeight: "900" }}>
+                    {currentCategory.label}
+                  </Text>
+                  {renderCategoryContent(currentCategory.id, filters, onChange)}
+                </ScrollView>
+              </View>
+            </View>
 
             <View
               style={{
-                padding: 18,
+                minHeight: 84,
+                paddingHorizontal: isWide ? 28 : 18,
+                paddingVertical: 14,
+                alignItems: "flex-end",
+                justifyContent: "center",
                 borderTopWidth: 1,
                 borderTopColor: colors.border,
-                backgroundColor: colors.surface
+                backgroundColor: colors.surface,
+                boxShadow: "0 -10px 24px rgba(15, 23, 42, 0.06)"
               }}
             >
-              <ValidateButton onPress={() => setExpanded(false)} />
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setExpanded(false)}
+                style={({ pressed }) => ({
+                  minHeight: 52,
+                  width: isWide ? 340 : "100%",
+                  borderRadius: 999,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: colors.primary,
+                  borderWidth: 1,
+                  borderColor: colors.primary,
+                  boxShadow: "0 10px 22px rgba(124, 58, 237, 0.2)",
+                  opacity: pressed ? 0.78 : 1
+                })}
+              >
+                <Text selectable={false} style={{ color: colors.surface, fontSize: 18, fontWeight: "900", fontVariant: ["tabular-nums"] }}>
+                  Afficher {resultCount} résultat{resultCount > 1 ? "s" : ""}
+                </Text>
+              </Pressable>
             </View>
           </View>
         </View>
       </Modal>
     </View>
+  );
+}
+
+function renderCategoryContent(
+  categoryId: CategoryId,
+  filters: ActivityFilters,
+  onChange: (filters: Partial<ActivityFilters>) => void
+) {
+  const toggleScalar = <K extends keyof ActivityFilters>(key: K, value: ActivityFilters[K]) => {
+    const selected = filters[key] === value;
+    onChange({ [key]: selected ? undefined : value } as Partial<ActivityFilters>);
+  };
+
+  const toggleArray = <K extends "materialGroups" | "parentMood" | "developmentGoalGroups" | "skills">(
+    key: K,
+    value: NonNullable<ActivityFilters[K]>[number]
+  ) => {
+    const current = filters[key] ?? [];
+    const selected = current.includes(value as never);
+    onChange({
+      [key]: selected ? current.filter((item) => item !== value) : [...current, value]
+    } as Partial<ActivityFilters>);
+  };
+
+  if (categoryId === "suggested") {
+    return (
+      <FilterContentGroup>
+        <PillGrid>
+          <SelectionPill
+            label="Sans préparation"
+            selected={filters.setupTimeMax === 0}
+            onPress={() => toggleScalar("setupTimeMax", 0)}
+          />
+          <SelectionPill
+            label="Parent KO"
+            selected={filters.parentEnergy === "ko"}
+            onPress={() => toggleScalar("parentEnergy", "ko")}
+          />
+          <SelectionPill
+            label="Autonome"
+            selected={filters.independenceLevel === "high"}
+            onPress={() => toggleScalar("independenceLevel", "high")}
+          />
+          <SelectionPill
+            label="Sans surveillance"
+            selected={filters.requiresSupervision === false}
+            onPress={() => toggleScalar("requiresSupervision", false)}
+          />
+          <SelectionPill
+            label="Sans écran"
+            selected={Boolean(filters.screenFree)}
+            onPress={() => onChange({ screenFree: filters.screenFree ? undefined : true })}
+          />
+          <SelectionPill
+            label="Favoris"
+            selected={Boolean(filters.favoritesOnly)}
+            onPress={() => onChange({ favoritesOnly: !filters.favoritesOnly })}
+          />
+        </PillGrid>
+      </FilterContentGroup>
+    );
+  }
+
+  if (categoryId === "moment") {
+    return (
+      <FilterContentGroup helper="Choisis le contexte principal, puis affine avec les autres catégories.">
+        <PillGrid>
+          {SMART_FILTER_OPTIONS.map((option) => (
+            <SelectionPill
+              key={option.id}
+              label={option.label}
+              helper={option.helper}
+              selected={filters.need === option.id}
+              onPress={() => onChange(getNeedChange(filters, option.id))}
+            />
+          ))}
+        </PillGrid>
+      </FilterContentGroup>
+    );
+  }
+
+  if (categoryId === "age") {
+    return (
+      <FilterContentGroup helper="Les activités restent visibles si elles croisent la tranche choisie.">
+        <PillGrid>
+          {AGE_RANGES.map((range) => (
+            <SelectionPill
+              key={range.id}
+              label={range.label}
+              selected={filters.ageRange === range.id}
+              onPress={() => toggleScalar("ageRange", range.id)}
+            />
+          ))}
+        </PillGrid>
+      </FilterContentGroup>
+    );
+  }
+
+  if (categoryId === "time") {
+    return (
+      <>
+        <FilterContentGroup title="Durée">
+          <PillGrid>
+            {DURATION_OPTIONS.map((duration) => (
+              <SelectionPill
+                key={duration}
+                label={`${duration} min max`}
+                selected={filters.duration === duration}
+                onPress={() => toggleScalar("duration", duration)}
+              />
+            ))}
+          </PillGrid>
+        </FilterContentGroup>
+        <FilterContentGroup title="Préparation">
+          <PillGrid>
+            {SETUP_TIME_OPTIONS.map((option) => (
+              <SelectionPill
+                key={option.value}
+                label={option.label}
+                selected={filters.setupTimeMax === option.value}
+                onPress={() => toggleScalar("setupTimeMax", option.value)}
+              />
+            ))}
+          </PillGrid>
+        </FilterContentGroup>
+        <FilterContentGroup title="Rangement">
+          <PillGrid>
+            {CLEANUP_TIME_OPTIONS.map((option) => (
+              <SelectionPill
+                key={option.value}
+                label={option.label}
+                selected={filters.cleanupTimeMax === option.value}
+                onPress={() => toggleScalar("cleanupTimeMax", option.value)}
+              />
+            ))}
+          </PillGrid>
+        </FilterContentGroup>
+      </>
+    );
+  }
+
+  if (categoryId === "materials") {
+    return (
+      <FilterContentGroup helper="Tu peux sélectionner plusieurs familles.">
+        <PillGrid>
+          {MATERIAL_GROUP_OPTIONS.map((option) => (
+            <SelectionPill
+              key={option.id}
+              label={option.label}
+              selected={(filters.materialGroups ?? []).includes(option.id)}
+              onPress={() => toggleArray("materialGroups", option.id as MaterialGroup)}
+            />
+          ))}
+        </PillGrid>
+      </FilterContentGroup>
+    );
+  }
+
+  if (categoryId === "parent") {
+    return (
+      <>
+        <FilterContentGroup title="Énergie">
+          <PillGrid>
+            {ENERGY_OPTIONS.map((option) => (
+              <SelectionPill
+                key={option.id}
+                label={option.label}
+                helper={option.helper}
+                selected={filters.parentEnergy === option.id}
+                onPress={() => toggleScalar("parentEnergy", option.id)}
+              />
+            ))}
+          </PillGrid>
+        </FilterContentGroup>
+        <FilterContentGroup title="Humeur">
+          <PillGrid>
+            {PARENT_MOOD_OPTIONS.map((option) => (
+              <SelectionPill
+                key={option.id}
+                label={option.label}
+                selected={(filters.parentMood ?? []).includes(option.id)}
+                onPress={() => toggleArray("parentMood", option.id as ParentMood)}
+              />
+            ))}
+          </PillGrid>
+        </FilterContentGroup>
+      </>
+    );
+  }
+
+  if (categoryId === "weather") {
+    return (
+      <>
+        <FilterContentGroup title="Lieu et météo">
+          <PillGrid>
+            {WEATHER_OPTIONS.map((option) => (
+              <SelectionPill
+                key={option.id}
+                label={option.label}
+                selected={(filters.weather ?? "any") === option.id}
+                onPress={() => onChange({ weather: option.id })}
+              />
+            ))}
+          </PillGrid>
+        </FilterContentGroup>
+        <FilterContentGroup title="Saison">
+          <PillGrid>
+            {SEASON_OPTIONS.map((option) => (
+              <SelectionPill
+                key={option.id}
+                label={option.label}
+                selected={filters.season === option.id}
+                onPress={() => toggleScalar("season", option.id)}
+              />
+            ))}
+          </PillGrid>
+        </FilterContentGroup>
+      </>
+    );
+  }
+
+  if (categoryId === "mess") {
+    return (
+      <>
+        <FilterContentGroup title="Bazar maximum">
+          <PillGrid>
+            {MESS_OPTIONS.map((option) => (
+              <SelectionPill
+                key={option.id}
+                label={option.label}
+                selected={filters.messLevel === option.id}
+                onPress={() => toggleScalar("messLevel", option.id)}
+              />
+            ))}
+          </PillGrid>
+        </FilterContentGroup>
+        <FilterContentGroup title="Bruit maximum">
+          <PillGrid>
+            {NOISE_OPTIONS.map((option) => (
+              <SelectionPill
+                key={option.id}
+                label={option.label}
+                selected={filters.noiseLevel === option.id}
+                onPress={() => toggleScalar("noiseLevel", option.id)}
+              />
+            ))}
+          </PillGrid>
+        </FilterContentGroup>
+      </>
+    );
+  }
+
+  if (categoryId === "autonomy") {
+    return (
+      <FilterContentGroup>
+        <PillGrid>
+          <SelectionPill
+            label="Autonomie forte"
+            selected={filters.independenceLevel === "high"}
+            onPress={() => toggleScalar("independenceLevel", "high")}
+          />
+          <SelectionPill
+            label="Autonomie moyenne ou plus"
+            selected={filters.independenceLevel === "medium"}
+            onPress={() => toggleScalar("independenceLevel", "medium")}
+          />
+          <SelectionPill
+            label="Sans surveillance"
+            selected={filters.requiresSupervision === false}
+            onPress={() => toggleScalar("requiresSupervision", false)}
+          />
+          <SelectionPill
+            label="Avec surveillance"
+            selected={filters.requiresSupervision === true}
+            onPress={() => toggleScalar("requiresSupervision", true)}
+          />
+          <SelectionPill
+            label="Sans écran"
+            selected={Boolean(filters.screenFree)}
+            onPress={() => onChange({ screenFree: filters.screenFree ? undefined : true })}
+          />
+        </PillGrid>
+      </FilterContentGroup>
+    );
+  }
+
+  return (
+    <>
+      <FilterContentGroup title="Objectifs">
+        <PillGrid>
+          {DEVELOPMENT_GOAL_GROUP_OPTIONS.map((option) => (
+            <SelectionPill
+              key={option.id}
+              label={option.label}
+              selected={(filters.developmentGoalGroups ?? []).includes(option.id)}
+              onPress={() => toggleArray("developmentGoalGroups", option.id as DevelopmentGoalGroup)}
+            />
+          ))}
+        </PillGrid>
+      </FilterContentGroup>
+      <FilterContentGroup title="Compétences">
+        <PillGrid>
+          {SKILL_OPTIONS.map((skill) => (
+            <SelectionPill
+              key={skill}
+              label={skill}
+              selected={(filters.skills ?? []).includes(skill)}
+              onPress={() => toggleArray("skills", skill)}
+            />
+          ))}
+        </PillGrid>
+      </FilterContentGroup>
+    </>
+  );
+}
+
+function getFilterCategories(filters: ActivityFilters): FilterCategory[] {
+  return [
+    { id: "suggested", label: "Filtres suggérés", count: getSuggestedCount(filters) },
+    { id: "moment", label: "Moment", count: Number(Boolean(filters.need)) },
+    { id: "age", label: "Âge", count: Number(Boolean(filters.ageRange)) },
+    {
+      id: "time",
+      label: "Temps",
+      count: Number(Boolean(filters.duration)) + Number(filters.setupTimeMax !== undefined) + Number(filters.cleanupTimeMax !== undefined)
+    },
+    {
+      id: "materials",
+      label: "Matériel",
+      count: (filters.materialGroups?.length ?? 0) + (filters.materials?.length ?? 0)
+    },
+    {
+      id: "parent",
+      label: "Parent",
+      count: Number(Boolean(filters.parentEnergy)) + (filters.parentMood?.length ?? 0)
+    },
+    {
+      id: "weather",
+      label: "Lieu et météo",
+      count: Number(Boolean(filters.weather && filters.weather !== "any")) + Number(Boolean(filters.season && filters.season !== "all-season"))
+    },
+    {
+      id: "mess",
+      label: "Bazar et bruit",
+      count: Number(Boolean(filters.messLevel)) + Number(Boolean(filters.noiseLevel)) + Number(Boolean(filters.messLevelMin)) + Number(Boolean(filters.noiseLevelMin))
+    },
+    {
+      id: "autonomy",
+      label: "Autonomie",
+      count: Number(Boolean(filters.independenceLevel)) + Number(filters.requiresSupervision !== undefined) + Number(Boolean(filters.screenFree))
+    },
+    {
+      id: "development",
+      label: "Objectifs",
+      count: (filters.developmentGoalGroups?.length ?? 0) + (filters.skills?.length ?? 0)
+    }
+  ];
+}
+
+function getSuggestedCount(filters: ActivityFilters) {
+  return (
+    Number(filters.setupTimeMax === 0) +
+    Number(filters.parentEnergy === "ko") +
+    Number(filters.independenceLevel === "high") +
+    Number(filters.requiresSupervision === false) +
+    Number(Boolean(filters.screenFree)) +
+    Number(Boolean(filters.favoritesOnly))
   );
 }
 
@@ -274,6 +702,127 @@ function getNeedChange(filters: ActivityFilters, need: NonNullable<ActivityFilte
     developmentGoalGroups: [],
     season: undefined
   };
+}
+
+function CategoryTab({
+  category,
+  selected,
+  onPress
+}: {
+  category: FilterCategory;
+  selected: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        flex: 1,
+        minHeight: 0,
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        justifyContent: "center",
+        borderBottomWidth: 1,
+        borderBottomColor: "rgba(124, 58, 237, 0.12)",
+        borderLeftWidth: selected ? 5 : 0,
+        borderLeftColor: colors.primary,
+        backgroundColor: selected ? colors.surface : colors.primarySoft,
+        opacity: pressed ? 0.72 : 1
+      })}
+    >
+      <Text selectable={false} numberOfLines={2} style={{ color: selected ? colors.primaryDark : colors.text, fontSize: 14, lineHeight: 18, fontWeight: "900" }}>
+        {category.label}
+      </Text>
+      {category.count > 0 ? (
+        <Text selectable={false} style={{ color: colors.muted, fontSize: 12, lineHeight: 16, fontWeight: "800", marginTop: 4 }}>
+          {category.count} actif{category.count > 1 ? "s" : ""}
+        </Text>
+      ) : null}
+    </Pressable>
+  );
+}
+
+function FilterContentGroup({
+  title,
+  helper,
+  children
+}: {
+  title?: string;
+  helper?: string;
+  children: ReactNode;
+}) {
+  return (
+    <View style={{ gap: 12 }}>
+      {title ? (
+        <Text selectable style={{ color: colors.text, fontSize: 18, lineHeight: 24, fontWeight: "900" }}>
+          {title}
+        </Text>
+      ) : null}
+      {helper ? (
+        <Text selectable style={{ color: colors.muted, fontSize: 14, lineHeight: 20, fontWeight: "700" }}>
+          {helper}
+        </Text>
+      ) : null}
+      {children}
+    </View>
+  );
+}
+
+function PillGrid({ children }: { children: ReactNode }) {
+  return <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>{children}</View>;
+}
+
+function SelectionPill({
+  label,
+  helper,
+  selected,
+  onPress
+}: {
+  label: string;
+  helper?: string;
+  selected: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        minHeight: helper ? 64 : 46,
+        maxWidth: "100%",
+        borderRadius: 12,
+        paddingHorizontal: 16,
+        paddingVertical: helper ? 10 : 9,
+        justifyContent: "center",
+        borderWidth: 1.5,
+        borderColor: selected ? colors.primary : colors.border,
+        backgroundColor: selected ? colors.primarySoft : colors.surface,
+        boxShadow: selected ? "0 8px 18px rgba(124, 58, 237, 0.12)" : undefined,
+        opacity: pressed ? 0.72 : 1
+      })}
+    >
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 9 }}>
+        {selected ? (
+          <Text selectable={false} style={{ color: colors.primaryDark, fontSize: 18, lineHeight: 20, fontWeight: "900" }}>
+            ✓
+          </Text>
+        ) : null}
+        <View style={{ minWidth: 0 }}>
+          <Text selectable={false} style={{ color: selected ? colors.primaryDark : colors.text, fontSize: 16, lineHeight: 21, fontWeight: "900" }}>
+            {label}
+          </Text>
+          {helper ? (
+            <Text selectable={false} style={{ color: colors.muted, fontSize: 12, lineHeight: 16, fontWeight: "700", marginTop: 2 }}>
+              {helper}
+            </Text>
+          ) : null}
+        </View>
+      </View>
+    </Pressable>
+  );
 }
 
 function TrendIcon() {
@@ -340,84 +889,6 @@ function FilterIcon() {
   );
 }
 
-function CloseButton({ onPress }: { onPress: () => void }) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel="Fermer les options"
-      onPress={onPress}
-      style={({ pressed }) => ({
-        width: 36,
-        height: 36,
-        borderRadius: 999,
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: colors.text,
-        opacity: pressed ? 0.76 : 1
-      })}
-    >
-      <Text selectable={false} style={{ color: colors.surface, fontSize: 17, fontWeight: "900" }}>
-        X
-      </Text>
-    </Pressable>
-  );
-}
-
-function ValidateButton({ onPress }: { onPress: () => void }) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      style={({ pressed }) => ({
-        minHeight: 48,
-        borderRadius: radius.sm,
-        borderCurve: "continuous",
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: colors.primary,
-        opacity: pressed ? 0.78 : 1
-      })}
-    >
-      <Text selectable={false} style={{ color: colors.surface, fontSize: 15, fontWeight: "900" }}>
-        Valider
-      </Text>
-    </Pressable>
-  );
-}
-
-function QuickFilterSection({
-  title,
-  helper,
-  children,
-  divided
-}: {
-  title: string;
-  helper: string;
-  children: ReactNode;
-  divided?: boolean;
-}) {
-  return (
-    <View
-      style={{
-        gap: 8,
-        paddingTop: divided ? 12 : 0,
-        borderTopWidth: divided ? 1 : 0,
-        borderTopColor: colors.border
-      }}
-    >
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-        <Text selectable style={{ color: colors.text, fontSize: 14, fontWeight: "900" }}>
-          {title}
-        </Text>
-        <Text selectable style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>
-          {helper}
-        </Text>
-      </View>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>{children}</View>
-    </View>
-  );
-}
-
 function ToolbarButton({
   label,
   selected = false,
@@ -428,11 +899,10 @@ function ToolbarButton({
   label: string;
   selected?: boolean;
   icon?: ReactNode;
-  tone?: "solid" | "ghost" | "light";
+  tone?: "solid" | "ghost";
   onPress: () => void;
 }) {
   const isGhost = tone === "ghost";
-  const isLight = tone === "light";
 
   return (
     <Pressable
@@ -450,39 +920,13 @@ function ToolbarButton({
         gap: 7,
         backgroundColor: isGhost ? "rgba(255, 255, 255, 0.18)" : colors.surface,
         borderWidth: 1,
-        borderColor: isGhost ? "rgba(255, 255, 255, 0.3)" : isLight ? colors.border : colors.surface,
-        boxShadow: isGhost || isLight ? undefined : "0 10px 22px rgba(15, 23, 42, 0.14)",
+        borderColor: isGhost ? "rgba(255, 255, 255, 0.3)" : colors.surface,
+        boxShadow: isGhost ? undefined : "0 10px 22px rgba(15, 23, 42, 0.14)",
         opacity: pressed ? 0.76 : 1
       })}
     >
       {icon}
       <Text selectable={false} style={{ color: isGhost ? colors.surface : colors.primary, fontSize: 12, fontWeight: "900" }}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
-function CompactChip({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected }}
-      onPress={onPress}
-      style={({ pressed }) => ({
-        minHeight: 36,
-        paddingHorizontal: 13,
-        paddingVertical: 8,
-        borderRadius: 10,
-        alignItems: "center",
-        justifyContent: "center",
-        borderWidth: 1,
-        borderColor: selected ? colors.primary : colors.border,
-        backgroundColor: selected ? colors.primary : "#F8FAFC",
-        opacity: pressed ? 0.76 : 1
-      })}
-    >
-      <Text selectable style={{ color: selected ? colors.surface : colors.text, fontSize: 13, fontWeight: "900" }}>
         {label}
       </Text>
     </Pressable>

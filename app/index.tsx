@@ -1,12 +1,14 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Stack } from "expo-router";
 import { Animated, Easing, ScrollView, Text, useWindowDimensions, View } from "react-native";
 import type { ViewStyle } from "react-native";
+import { ActivityDetailOverlay } from "@/components/ActivityDetailOverlay";
 import { ActivityList } from "@/components/ActivityList";
 import { FilterBar } from "@/components/FilterBar";
 import { SearchBar } from "@/components/SearchBar";
 import { activities } from "@/data/activities";
 import { useActivityStore } from "@/store/activity-store";
+import type { Activity } from "@/types/activity";
 import { findMatchingActivities, sortActivitiesByRelevance } from "@/utils/activity-filter";
 import { colors } from "@/utils/theme";
 
@@ -16,6 +18,7 @@ const headerGradientStyle = {
 
 export default function HomeScreen() {
   const { width } = useWindowDimensions();
+  const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
   const filters = useActivityStore((state) => state.filters);
   const favoriteIds = useActivityStore((state) => state.favoriteIds);
   const setFilters = useActivityStore((state) => state.setFilters);
@@ -29,61 +32,70 @@ export default function HomeScreen() {
   const horizontalPadding = width >= 720 ? 48 : 20;
 
   return (
-    <ScrollView
-      contentInsetAdjustmentBehavior="automatic"
-      style={{ backgroundColor: colors.background }}
-      contentContainerStyle={{ paddingBottom: 48 }}
-    >
-      <Stack.Screen options={{ title: "Mini Activites", headerShown: false }} />
-
-      <View
-        style={[
-          {
-            width: "100%",
-            paddingTop: width >= 720 ? 32 : 30,
-            paddingBottom: width >= 720 ? 26 : 24,
-            paddingHorizontal: horizontalPadding,
-            backgroundColor: colors.primaryDark
-          },
-          headerGradientStyle
-        ]}
+    <>
+      <ScrollView
+        contentInsetAdjustmentBehavior="automatic"
+        style={{ backgroundColor: colors.background }}
+        contentContainerStyle={{ paddingBottom: 48 }}
       >
-        <View style={{ width: "100%", maxWidth: 1240, alignSelf: "center", gap: 16 }}>
-          <View style={{ gap: 8 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-              <AnimatedCubesIcon />
-              <Text selectable style={{ color: colors.surface, fontSize: width >= 720 ? 24 : 22, lineHeight: 30, fontWeight: "900" }}>
-                Activités rapides
+        <Stack.Screen options={{ title: "Mini Activites", headerShown: false }} />
+
+        <View
+          style={[
+            {
+              width: "100%",
+              paddingTop: width >= 720 ? 32 : 30,
+              paddingBottom: width >= 720 ? 26 : 24,
+              paddingHorizontal: horizontalPadding,
+              backgroundColor: colors.primaryDark
+            },
+            headerGradientStyle
+          ]}
+        >
+          <View style={{ width: "100%", maxWidth: 1240, alignSelf: "center", gap: 16 }}>
+            <View style={{ gap: 8 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                <AnimatedCubesIcon />
+                <Text selectable style={{ color: colors.surface, fontSize: width >= 720 ? 24 : 22, lineHeight: 30, fontWeight: "900" }}>
+                  Activités rapides
+                </Text>
+              </View>
+              <Text selectable style={{ color: "#F3E8FF", fontSize: 13, lineHeight: 19, fontWeight: "700" }}>
+                Trouve une idée jouable avec le temps, l'énergie et le matériel du moment.
               </Text>
             </View>
-            <Text selectable style={{ color: "#F3E8FF", fontSize: 13, lineHeight: 19, fontWeight: "700" }}>
-              Trouve une idée jouable avec le temps, l'énergie et le matériel du moment.
-            </Text>
+
+            <SearchBar
+              value={filters.search ?? ""}
+              onChange={(search) => setFilters({ search })}
+              placeholder="Ex: 5, dehors, calme, bain, doudou..."
+            />
+
+            <FilterBar
+              filters={filters}
+              resultCount={matchingActivities.length}
+              onChange={setFilters}
+              onReset={resetFilters}
+            />
           </View>
+        </View>
 
-          <SearchBar
-            value={filters.search ?? ""}
-            onChange={(search) => setFilters({ search })}
-            placeholder="Ex: 5, dehors, calme, bain, doudou..."
-          />
-
-          <FilterBar
-            filters={filters}
-            resultCount={matchingActivities.length}
-            onChange={setFilters}
-            onReset={resetFilters}
+        <View style={{ width: "100%", maxWidth: 1240, alignSelf: "center", paddingHorizontal: horizontalPadding, paddingTop: 32 }}>
+          <ActivityList
+            activities={matchingActivities}
+            favoriteIds={favoriteIds}
+            onOpenActivity={setSelectedActivity}
+            onToggleFavorite={toggleFavorite}
           />
         </View>
-      </View>
+      </ScrollView>
 
-      <View style={{ width: "100%", maxWidth: 1240, alignSelf: "center", paddingHorizontal: horizontalPadding, paddingTop: 32 }}>
-        <ActivityList
-          activities={matchingActivities}
-          favoriteIds={favoriteIds}
-          onToggleFavorite={toggleFavorite}
-        />
-      </View>
-    </ScrollView>
+      <ActivityDetailOverlay
+        activity={selectedActivity}
+        visible={selectedActivity !== null}
+        onClose={() => setSelectedActivity(null)}
+      />
+    </>
   );
 }
 
